@@ -1,0 +1,22 @@
+{
+  "deviceId": "CAM-01",
+  "roiId": "ROI-CAM01-01",
+  "mapZoneId": "YB-01",
+  "input": {
+    "type": "file",
+    "path": "data/videos/Browse2.mpg"
+  },
+  "roi": {
+    "coordinateSystem": "normalized",
+    "points": []
+  },
+  "thresholds": {
+    "dwellSeconds": 2.0,
+    "exitSeconds": 1.0,
+    "detectionGraceSeconds": 0.5
+  },
+  "heartbeat": {
+    "intervalSeconds": 3.0,
+    "timeoutSeconds": 10.0
+  }
+}
