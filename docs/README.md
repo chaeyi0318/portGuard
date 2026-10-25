@@ -47,3 +47,7 @@ python -m flask --app app run
 
 이 응답은 Flask 서버의 응답 여부만 나타낸다.
 DB 연결이나 영상 분석의 정상 동작을 뜻하지 않는다.
+## 가상 경광등
+
+BEACON-01 독립 에이전트, MQTT worker, 장비 조회·명령·이력 API가 추가되었다.
+[실행 방법과 API·MQTT 계약](beacon.md)을 참고한다.

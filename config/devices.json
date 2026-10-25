@@ -1,0 +1,1 @@
+{"devices":[{"deviceId":"BEACON-01","type":"beacon","simulated":true}],"heartbeatSeconds":3,"disconnectSeconds":10,"commandTimeoutSeconds":10}
