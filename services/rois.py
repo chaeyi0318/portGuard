@@ -73,3 +73,9 @@ def create_roi(data):
     roi.pop("_id", None)
 
     return roi, 201, None
+
+def get_roi(roi_id):
+    return db["rois"].find_one(
+        {"roiId": roi_id},
+        {"_id": 0},
+    )

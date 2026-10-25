@@ -1,7 +1,8 @@
 from flask import Blueprint, request
 
 from services.rois import create_roi
-
+from services.rois import create_roi, get_roi
+from serializers import serialize_roi
 
 rois_bp = Blueprint(
     "rois",
@@ -22,8 +23,13 @@ def post_roi():
     if error is not None:
         return {"error": error}, status_code
 
-    result = dict(roi)
-    result["createdAt"] = result["createdAt"].isoformat()
-    result["updatedAt"] = result["updatedAt"].isoformat()
+    return {"roi": serialize_roi(roi)}, status_code
 
-    return {"roi": result}, status_code
+@rois_bp.get("/<roi_id>")
+def get_roi_detail(roi_id):
+    roi = get_roi(roi_id)
+
+    if roi is None:
+        return {"error": "위험구역을 찾을 수 없습니다."}, 404
+
+    return {"roi": serialize_roi(roi)}
