@@ -4,7 +4,9 @@ import cv2
 import numpy as np
 import requests
 from ultralytics import YOLO
+from uuid import uuid4
 
+from evidence import save_evidence
 from dwell_tracker import DwellTracker
 from roi_geometry import get_foot_point, is_foot_inside_roi
 from settings import load_camera_config
@@ -111,13 +113,6 @@ def main():
                 observations,
             )
 
-            for event in dwell_tracker.new_events:
-                print(
-                    f"[침입 시험] ID:{event['trackId']} "
-                    f"영상:{event['videoTime']:.2f}s "
-                    f"체류:{event['dwellSeconds']:.2f}s"
-                )
-
             # 위험구역 표시
             cv2.polylines(
                 frame,
@@ -197,6 +192,22 @@ def main():
                 1,
             )
 
+            for event in dwell_tracker.new_events:
+                event_id = str(uuid4())
+
+                evidence = save_evidence(
+                    event_id,
+                    frame,
+                )
+
+                print(
+                    f"[침입 시험] 사건:{event_id} "
+                    f"ID:{event['trackId']} "
+                    f"영상:{event['videoTime']:.2f}s "
+                    f"체류:{event['dwellSeconds']:.2f}s "
+                    f"이미지:{evidence['fileName']}"
+                )
+                
             cv2.imshow("PortGuard ROI - Q to quit", frame)
 
             if cv2.waitKey(40) & 0xFF == ord("q"):
