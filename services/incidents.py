@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from db import db
 
@@ -59,3 +60,41 @@ def transition_incident(event_id, status, note, expected_version):
         return None, 409, "사건이 변경되었습니다. 새로 조회해 주세요."
 
     return updated, 200, None
+
+def save_incident(event):
+    # 필요한 필드만 선택하고 처리 상태는 서버에서 지정
+    incident = {
+        "eventId": event["eventId"],
+        "deviceId": event["deviceId"],
+        "roiId": event["roiId"],
+        "trackId": event["trackId"],
+        "sessionId": event["sessionId"],
+        "eventType": "intrusion",
+        "source": event["source"],
+        "occurredAt": event["occurredAt"],
+        "capturedAt": event["capturedAt"],
+        "receivedAt": datetime.now(timezone.utc),
+        "videoTimeSeconds": event["videoTimeSeconds"],
+        "dwellSeconds": event["dwellSeconds"],
+        "evidence": event["evidence"],
+        "status": "unreviewed",
+        "version": 1,
+        "history": [],
+    }
+
+    try:
+        db["incidents"].insert_one(incident)
+    except DuplicateKeyError:
+        existing = db["incidents"].find_one(
+            {"eventId": event["eventId"]},
+            {"_id": 0},
+        )
+
+        if existing is None:
+            raise
+
+        return existing, False
+
+    incident.pop("_id", None)
+
+    return incident, True
