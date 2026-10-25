@@ -3,6 +3,7 @@ from flask import Blueprint, request
 from db import db
 
 from services.incidents import transition_incident
+from serializers import serialize_incident
 
 incidents_bp = Blueprint(
     "incidents",
@@ -38,13 +39,12 @@ def get_incidents():
         .limit(100)
     )
 
-    for incident in incidents:
-        for field in ("occurredAt", "capturedAt", "receivedAt"):
-            value = incident.get(field)
-            if value is not None:
-                incident[field] = value.isoformat()
-
-    return {"incidents": incidents}
+    return {
+        "incidents": [
+            serialize_incident(incident)
+            for incident in incidents
+        ]
+    }
 
 
 @incidents_bp.get("/<event_id>")
@@ -57,17 +57,11 @@ def get_incident(event_id):
     if incident is None:
         return {"error": "사건을 찾을 수 없습니다"}, 404
 
-    for field in ("occurredAt", "capturedAt", "receivedAt"):
-        value = incident.get(field)
-
-        if value is not None:
-            incident[field] = value.isoformat()
-
-    return {"incident": incident}
+    return {"incident": serialize_incident(incident)}
 
 
 @incidents_bp.post("/<event_id>/transition")
-def post_incident_transiton(event_id):
+def post_incident_transition(event_id):
     if not request.is_json:
         return {"error": "JSON 형식으로 요청해주세요"}, 400
 
@@ -99,14 +93,4 @@ def post_incident_transiton(event_id):
     if error is not None:
         return {"error": error}, status_code
 
-    for field in ("occurredAt", "capturedAt", "receivedAt", "updatedAt"):
-        value = incident.get(field)
-        if value is not None:
-            incident[field] = value.isoformat()
-
-    for change in incident.get("history", []):
-        value = change.get("changedAt")
-        if value is not None:
-            change["changedAt"] = value.isoformat()
-
-    return {"incident": incident}, status_code
+    return {"incident": serialize_incident(incident)}, status_code
