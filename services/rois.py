@@ -1,5 +1,10 @@
 import math
 from shapely.geometry import Polygon
+from datetime import datetime, timezone
+
+from pymongo.errors import DuplicateKeyError
+
+from db import db
 
 def validate_roi(data):
     if not isinstance(data, dict):
@@ -41,3 +46,30 @@ def validate_roi(data):
         return "다각형이 유효하지 않습니다. 변이 서로 교차하는지 확인해 주세요."
 
     return None
+
+def create_roi(data):
+    error = validate_roi(data)
+
+    if error is not None:
+        return None, 400, error
+
+    now = datetime.now(timezone.utc)
+
+    roi = {
+        "roiId": data["roiId"],
+        "deviceId": data["deviceId"],
+        "coordinateSystem": "normalized",
+        "points": data["points"],
+        "version": 1,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+
+    try:
+        db["rois"].insert_one(roi)
+    except DuplicateKeyError:
+        return None, 409, "이미 존재하는 roiId입니다."
+
+    roi.pop("_id", None)
+
+    return roi, 201, None
