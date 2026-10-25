@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import UUID
 
 import cv2
+import json
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,3 +34,12 @@ def save_evidence(event_id, frame):
         "fileName": image_path.name,
         "contentType": "image/jpeg",
     }
+
+def save_event_record(event):
+    safe_id = str(UUID(event["eventId"]))
+    record_path = EVIDENCE_DIR / f"{safe_id}.json"
+
+    with record_path.open("x", encoding="utf-8") as file:
+        json.dump(event, file, ensure_ascii=False, indent=2)
+
+    return record_path

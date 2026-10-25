@@ -5,8 +5,9 @@ import numpy as np
 import requests
 from ultralytics import YOLO
 from uuid import uuid4
+from datetime import datetime, timezone
 
-from evidence import save_evidence
+from evidence import save_evidence, save_event_record
 from dwell_tracker import DwellTracker
 from roi_geometry import get_foot_point, is_foot_inside_roi
 from settings import load_camera_config
@@ -17,6 +18,10 @@ BASE_DIR = Path(__file__).resolve().parent
 
 def main():
     config = load_camera_config()
+
+    session_id = str(uuid4())
+    session_started_at = datetime.now(timezone.utc).isoformat()
+
     video_path = BASE_DIR / config["input"]["path"]
 
     # Flask에서 저장된 ROI 조회
@@ -63,6 +68,7 @@ def main():
                 print("영상 분석을 종료합니다.")
                 break
 
+            captured_at = datetime.now(timezone.utc).isoformat()
             # 처리 속도와 별개로 원본 영상의 시각 사용
             video_time = frame_index / fps
             frame_index += 1
@@ -194,20 +200,34 @@ def main():
 
             for event in dwell_tracker.new_events:
                 event_id = str(uuid4())
+                evidence = save_evidence(event_id, frame)
 
-                evidence = save_evidence(
-                    event_id,
-                    frame,
-                )
+                record = {
+                    "eventId": event_id,
+                    "deviceId": config["deviceId"],
+                    "roiId": roi["roiId"],
+                    "roiVersion": roi["version"],
+                    "trackId": event["trackId"],
+                    "sessionId": session_id,
+                    "sessionStartedAt": session_started_at,
+                    "eventType": "intrusion",
+                    "source": "recorded_video",
+                    "inputFileName": video_path.name,
+                    "occurredAt": datetime.now(timezone.utc).isoformat(),
+                    "capturedAt": captured_at,
+                    "videoTimeSeconds": event["videoTime"],
+                    "dwellSeconds": event["dwellSeconds"],
+                    "evidence": evidence,
+                }
+
+                record_path = save_event_record(record)
 
                 print(
                     f"[침입 시험] 사건:{event_id} "
-                    f"ID:{event['trackId']} "
                     f"영상:{event['videoTime']:.2f}s "
-                    f"체류:{event['dwellSeconds']:.2f}s "
-                    f"이미지:{evidence['fileName']}"
+                    f"기록:{record_path.name}"
                 )
-                
+
             cv2.imshow("PortGuard ROI - Q to quit", frame)
 
             if cv2.waitKey(40) & 0xFF == ord("q"):
