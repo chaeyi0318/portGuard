@@ -5,6 +5,9 @@ from pymongo.errors import DuplicateKeyError
 
 from db import db
 
+import math
+from uuid import UUID
+
 # 현재 상태를 키로 사용해서 다음 상태를 찾는 딕셔너리
 NEXT_STATUS = {
     "unreviewed": "acknowledged",
