@@ -2,11 +2,14 @@ from flask import Blueprint, request
 
 from db import db
 
+from services.incidents import transition_incident
+
 incidents_bp = Blueprint(
     "incidents",
     __name__,
     url_prefix="/vision-api/incidents",
 )
+
 
 @incidents_bp.get("")
 def get_incidents():
@@ -43,6 +46,7 @@ def get_incidents():
 
     return {"incidents": incidents}
 
+
 @incidents_bp.get("/<event_id>")
 def get_incident(event_id):
     incident = db["incidents"].find_one(
@@ -60,3 +64,49 @@ def get_incident(event_id):
             incident[field] = value.isoformat()
 
     return {"incident": incident}
+
+
+@incidents_bp.post("/<event_id>/transition")
+def post_incident_transiton(event_id):
+    if not request.is_json:
+        return {"error": "JSON 형식으로 요청해주세요"}, 400
+
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return {"error": "JSON 객체를 보내 주세요."}, 400
+
+    status = data.get("status")
+    note = data.get("note")
+    expected_version = data.get("expectedVersion")
+
+    if status not in ("acknowledged", "in_progress", "closed"):
+        return {"error": "지원하지 않는 처리 상태입니다."}, 400
+
+    if not isinstance(note, str):
+        return {"error": "note는 문자열이어야 합니다."}, 400
+
+    if type(expected_version) is not int or expected_version < 1:
+        return {"error": "expectedVersion은 1 이상의 정수여야 합니다."}, 400
+
+    incident, status_code, error = transition_incident(
+        event_id,
+        status,
+        note,
+        expected_version,
+    )
+
+    if error is not None:
+        return {"error": error}, status_code
+
+    for field in ("occurredAt", "capturedAt", "receivedAt", "updatedAt"):
+        value = incident.get(field)
+        if value is not None:
+            incident[field] = value.isoformat()
+
+    for change in incident.get("history", []):
+        value = change.get("changedAt")
+        if value is not None:
+            change["changedAt"] = value.isoformat()
+
+    return {"incident": incident}, status_code
