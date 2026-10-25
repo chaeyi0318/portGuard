@@ -50,6 +50,7 @@ def main():
     dwell_tracker = DwellTracker(
         grace_seconds=config["thresholds"]["detectionGraceSeconds"],
         exit_seconds=config["thresholds"]["exitSeconds"],
+        dwell_seconds=config["thresholds"]["dwellSeconds"],
     )
 
     try:
@@ -109,6 +110,13 @@ def main():
                 video_time,
                 observations,
             )
+
+            for event in dwell_tracker.new_events:
+                print(
+                    f"[침입 시험] ID:{event['trackId']} "
+                    f"영상:{event['videoTime']:.2f}s "
+                    f"체류:{event['dwellSeconds']:.2f}s"
+                )
 
             # 위험구역 표시
             cv2.polylines(
