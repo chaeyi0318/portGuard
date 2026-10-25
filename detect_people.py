@@ -49,6 +49,7 @@ def main():
 
     dwell_tracker = DwellTracker(
         grace_seconds=config["thresholds"]["detectionGraceSeconds"],
+        exit_seconds=config["thresholds"]["exitSeconds"],
     )
 
     try:
