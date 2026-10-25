@@ -150,9 +150,20 @@ def main():
                     -1,
                 )
 
+                dwell_limit = config["thresholds"]["dwellSeconds"]
+
+                if track_id is None:
+                    state_label = "UNTRACKED"
+                elif not inside:
+                    state_label = "OUTSIDE"
+                elif dwell >= dwell_limit:
+                    state_label = "DWELL"
+                else:
+                    state_label = "INSIDE"
+
                 label = (
                     f"ID:{track_id} "
-                    f"{'INSIDE' if inside else 'OUTSIDE'} "
+                    f"{state_label} "
                     f"{dwell:.1f}s"
                 )
 
