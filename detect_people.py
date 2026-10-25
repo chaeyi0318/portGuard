@@ -5,6 +5,7 @@ import numpy as np
 import requests
 from ultralytics import YOLO
 
+from dwell_tracker import DwellTracker
 from roi_geometry import get_foot_point, is_foot_inside_roi
 from settings import load_camera_config
 
@@ -38,6 +39,18 @@ def main():
         capture.release()
         raise SystemExit(f"영상을 열 수 없습니다: {video_path}")
 
+    fps = capture.get(cv2.CAP_PROP_FPS)
+
+    if not np.isfinite(fps) or fps <= 0:
+        capture.release()
+        raise SystemExit("영상 FPS를 확인할 수 없습니다.")
+
+    frame_index = 0
+
+    dwell_tracker = DwellTracker(
+        grace_seconds=config["thresholds"]["detectionGraceSeconds"],
+    )
+
     try:
         while True:
             success, frame = capture.read()
@@ -46,9 +59,13 @@ def main():
                 print("영상 분석을 종료합니다.")
                 break
 
+            # 처리 속도와 별개로 원본 영상의 시각 사용
+            video_time = frame_index / fps
+            frame_index += 1
+
             height, width = frame.shape[:2]
 
-            # 정규화 좌표를 영상 픽셀 좌표로 변환
+            # ROI를 픽셀 좌표로 변환
             polygon = np.array(
                 [
                     [round(x * width), round(y * height)]
@@ -57,7 +74,7 @@ def main():
                 dtype=np.int32,
             )
 
-            # 원본 프레임에서 사람 감지 및 추적
+            # 사람 감지 및 추적
             result = model.track(
                 frame,
                 persist=True,
@@ -73,6 +90,24 @@ def main():
                 track_ids = result.boxes.id.int().cpu().tolist()
             else:
                 track_ids = [None] * len(boxes)
+
+            # ID가 있는 사람의 안팎 관측 결과
+            observations = {
+                track_id: is_foot_inside_roi(
+                    box,
+                    points,
+                    width,
+                    height,
+                )
+                for box, track_id in zip(boxes, track_ids)
+                if track_id is not None
+            }
+
+            # 누락 유예를 적용한 체류 시간 계산
+            durations = dwell_tracker.update(
+                video_time,
+                observations,
+            )
 
             # 위험구역 표시
             cv2.polylines(
@@ -91,6 +126,7 @@ def main():
                     height,
                 )
 
+                dwell = durations.get(track_id, 0.0)
                 color = (0, 0, 255) if inside else (0, 255, 0)
 
                 x1, y1, x2, y2 = map(round, box)
@@ -105,7 +141,7 @@ def main():
                     2,
                 )
 
-                # 박스 발밑 중앙점
+                # 발밑 중앙점
                 cv2.circle(
                     frame,
                     (round(foot_x), round(foot_y)),
@@ -114,10 +150,10 @@ def main():
                     -1,
                 )
 
-                # 추적 ID와 안팎 상태
                 label = (
                     f"ID:{track_id} "
-                    f"{'INSIDE' if inside else 'OUTSIDE'}"
+                    f"{'INSIDE' if inside else 'OUTSIDE'} "
+                    f"{dwell:.1f}s"
                 )
 
                 cv2.putText(
@@ -129,6 +165,17 @@ def main():
                     color,
                     1,
                 )
+
+            # 원본 영상 시각 표시
+            cv2.putText(
+                frame,
+                f"VIDEO {video_time:.2f}s",
+                (10, 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+            )
 
             cv2.imshow("PortGuard ROI - Q to quit", frame)
 
