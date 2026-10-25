@@ -26,6 +26,6 @@ try:
     db["incidents"].insert_one(incident)
     print("시험 사건 저장 완료")
 except DuplicateKeyError:
-    print("중복 사건, 저장X")
+    print("중복 사건이므로 저장 안함")
 finally:
     client.close()

@@ -42,3 +42,21 @@ def get_incidents():
                 incident[field] = value.isoformat()
 
     return {"incidents": incidents}
+
+@incidents_bp.get("/<event_id>")
+def get_incident(event_id):
+    incident = db["incidents"].find_one(
+        {"eventId": event_id},
+        {"_id": 0},
+    )
+
+    if incident is None:
+        return {"error": "사건을 찾을 수 없습니다"}, 404
+
+    for field in ("occurredAt", "capturedAt", "receivedAt"):
+        value = incident.get(field)
+
+        if value is not None:
+            incident[field] = value.isoformat()
+
+    return {"incident": incident}

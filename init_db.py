@@ -9,6 +9,6 @@ try:
         name="uq_incidents_event_id",
     )
 
-    print("incidents 컬렉션과 eventId 유일 인덱스 준비 완료")
+    print("incidents 컬렉션과 eventId 유니크 인덱스 준비 완료")
 finally:
     client.close()
