@@ -83,3 +83,22 @@ def test_bad_requests(database):
     api = app.test_client()
     assert api.post('/vision-api/devices/BEACON-01/commands', json={'action':'open'}).status_code == 400
     assert api.post('/vision-api/devices/missing/commands', json={'action':'turn_on'}).status_code == 404
+
+
+@pytest.mark.parametrize('fields', [
+    {'commandId': 'test', 'status': 'invalid'},
+    {'status': 'accepted'},
+    {'commandId': ' ', 'status': 'succeeded'},
+    {'commandId': 1, 'status': 'failed'},
+])
+def test_invalid_ack_does_not_restore_device(database, fields):
+    stamp = now().isoformat()
+    database.devices.insert_one(dict(deviceId='BEACON-01',
+                                    connectionStatus='disconnected', operationStatus='off'))
+    previous = database.devices.find_one()
+    packet = dict(deviceId='BEACON-01', sessionId='new', sessionStartedAt=stamp,
+                  sequence=1, sentAt=stamp, simulated=True, operationStatus='on', **fields)
+    with pytest.raises(ValueError):
+        worker.receive('devices/BEACON-01/acks', json.dumps(packet))
+    assert database.devices.find_one() == previous
+    assert database.commands.count_documents({}) == 0

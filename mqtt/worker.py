@@ -22,6 +22,11 @@ def receive(topic, payload):
         return
     data = json.loads(payload)
     validate_message(data, device_id)
+    if kind == 'acks':
+        if data.get('status') not in ('accepted', 'succeeded', 'failed'):
+            raise ValueError('Invalid command result')
+        if not isinstance(data.get('commandId'), str) or not data['commandId'].strip():
+            raise ValueError('Invalid command ID')
     # Retained/replayed packets cannot prove a fresh connection.
     age = (now() - utc(data['sentAt'])).total_seconds()
     if age < -5 or age > CONFIG['disconnectSeconds']:
@@ -43,8 +48,6 @@ def receive(topic, payload):
     db.devices.update_one({'deviceId': device_id}, update, upsert=True)
     if kind == 'acks':
         status = data.get('status')
-        if status not in ('accepted', 'succeeded', 'failed'):
-            raise ValueError('Invalid command result')
         allowed = ['queued', 'sent'] if status == 'accepted' else ['queued', 'sent', 'accepted']
         db.commands.update_one(
             {'commandId': data.get('commandId'), 'deviceId': device_id,
