@@ -1,4 +1,7 @@
-from flask import Blueprint, request
+from pathlib import Path
+from uuid import UUID
+
+from flask import Blueprint, request, send_from_directory
 
 from db import db
 
@@ -10,6 +13,8 @@ incidents_bp = Blueprint(
     __name__,
     url_prefix="/vision-api/incidents",
 )
+
+EVIDENCE_DIR = Path(__file__).resolve().parent.parent / "data" / "evidence"
 
 
 @incidents_bp.get("")
@@ -58,6 +63,33 @@ def get_incident(event_id):
         return {"error": "사건을 찾을 수 없습니다"}, 404
 
     return {"incident": serialize_incident(incident)}
+
+
+@incidents_bp.get("/<event_id>/evidence")
+def get_incident_evidence(event_id):
+    try:
+        safe_id = str(UUID(event_id))
+    except ValueError:
+        return {"error": "사건 ID는 UUID 형식이어야 합니다."}, 400
+
+    incident = db["incidents"].find_one({"eventId": safe_id}, {"_id": 0})
+    if incident is None:
+        return {"error": "사건을 찾을 수 없습니다"}, 404
+
+    evidence = incident.get("evidence")
+    file_name = f"{safe_id}.jpg"
+    if (
+        not isinstance(evidence, dict)
+        or evidence.get("fileName") != file_name
+        or evidence.get("contentType") != "image/jpeg"
+    ):
+        return {"error": "증거 이미지 정보가 없습니다."}, 404
+
+    image_path = (EVIDENCE_DIR / file_name).resolve()
+    if image_path.parent != EVIDENCE_DIR.resolve() or not image_path.is_file():
+        return {"error": "증거 이미지 파일이 없습니다."}, 404
+
+    return send_from_directory(EVIDENCE_DIR, file_name, mimetype="image/jpeg")
 
 
 @incidents_bp.post("/<event_id>/transition")

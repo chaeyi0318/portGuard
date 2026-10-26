@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import cv2
 import numpy as np
@@ -28,7 +29,7 @@ def main():
     roi_id = config["roiId"]
 
     response = requests.get(
-        f"http://127.0.0.1:5050/vision-api/rois/{roi_id}",
+        f"{os.getenv('VISION_API_URL', 'http://127.0.0.1:5001').rstrip('/')}/vision-api/rois/{roi_id}",
         timeout=5,
     )
     response.raise_for_status()

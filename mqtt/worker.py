@@ -8,6 +8,7 @@ from pymongo import ReturnDocument
 from db import db
 from mqtt.common import client, connect, now
 from services.devices import CONFIG, DEVICES, newer, utc, validate_message
+from mqtt.vision import receive_event
 
 LOG = logging.getLogger(__name__)
 
@@ -84,11 +85,13 @@ def main():
     logging.basicConfig(level=logging.INFO)
     db.devices.create_index('deviceId', unique=True)
     db.commands.create_index('commandId', unique=True)
+    db.incidents.create_index('eventId', unique=True, name='uq_incidents_event_id')
     inbox = queue.Queue(maxsize=1000)
     connection = client('portguard-device-worker')
 
     def on_connect(c, userdata, flags, reason_code, properties):
         if not reason_code.is_failure:
+            c.subscribe('devices/CAM-01/events', qos=1)
             for device_id in DEVICES:
                 for kind in ('heartbeat', 'status', 'acks'):
                     c.subscribe(f'devices/{device_id}/{kind}', qos=1)
@@ -107,7 +110,10 @@ def main():
         while True:
             try:
                 topic, payload = inbox.get(timeout=0.2)
-                receive(topic, payload)
+                if topic == 'devices/CAM-01/events':
+                    receive_event(payload, connection)
+                else:
+                    receive(topic, payload)
             except queue.Empty:
                 pass
             except Exception:
