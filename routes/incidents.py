@@ -7,6 +7,7 @@ from db import db
 
 from services.incidents import transition_incident
 from serializers import serialize_incident
+from socket_server import socketio
 
 incidents_bp = Blueprint(
     "incidents",
@@ -125,4 +126,11 @@ def post_incident_transition(event_id):
     if error is not None:
         return {"error": error}, status_code
 
-    return {"incident": serialize_incident(incident)}, status_code
+    serialized = serialize_incident(incident)
+
+    socketio.emit(
+        "incident.updated",
+        {"incident": serialized},
+    )
+
+    return {"incident": serialized}, status_code
