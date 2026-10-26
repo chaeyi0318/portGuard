@@ -3,11 +3,18 @@ from flask import Flask
 from routes.incidents import incidents_bp
 from routes.devices import devices_bp
 from routes.rois import rois_bp
+from socket_server import socketio
 
 from pymongo.errors import PyMongoError
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
+
+socketio.init_app(
+    app,
+    async_mode="threading",
+    path="/vision-socket/socket.io",
+)
 
 app.register_blueprint(incidents_bp)
 app.register_blueprint(devices_bp)
@@ -28,3 +35,13 @@ def handle_database_error(error):
         "error": "데이터베이스 작업을 완료하지 못했습니다",
         "code": "DATABASE_ERROR",
     }, 503
+
+
+if __name__ == "__main__":
+    socketio.run(
+        app,
+        host="127.0.0.1",
+        port=5001,
+        debug=False,
+        use_reloader=False,
+    )
