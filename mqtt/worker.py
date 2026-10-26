@@ -17,35 +17,57 @@ def receive(topic, payload):
     parts = topic.split('/')
     if len(parts) != 3 or parts[0] != 'devices' or parts[1] not in DEVICES:
         return
+    
     device_id, kind = parts[1:]
+
     if kind not in ('heartbeat', 'status', 'acks'):
         return
+    
     data = json.loads(payload)
     validate_message(data, device_id)
+
     if kind == 'acks':
         if data.get('status') not in ('accepted', 'succeeded', 'failed'):
             raise ValueError('Invalid command result')
         if not isinstance(data.get('commandId'), str) or not data['commandId'].strip():
             raise ValueError('Invalid command ID')
+        
     # Retained/replayed packets cannot prove a fresh connection.
     age = (now() - utc(data['sentAt'])).total_seconds()
+
     if age < -5 or age > CONFIG['disconnectSeconds']:
         return
+    
     previous = db.devices.find_one({'deviceId': device_id})
+
     if not newer(previous, data):
         return
+    
+    allowed_operations = {
+        'beacon': ('on', 'off', 'error'),
+        'gate': ('open', 'closed', 'unknown'),
+    }
+
+    device_type = DEVICES[device_id]['type']
+    operations = allowed_operations.get(device_type, ())
+
     operation = data.get('operationStatus')
-    if operation not in ('on', 'off', 'error'):
+
+    if operation not in operations:
         raise ValueError('Invalid operation status')
+    
     stamp = now()
     fields = {key: data[key] for key in ('sessionId', 'sessionStartedAt', 'sequence')}
     fields.update(lastSeenAt=stamp, observedAt=utc(data['sentAt']),
                   connectionStatus='online', operationStatus=operation, simulated=True)
     update = {'$set': fields}
+
     if not previous or previous.get('connectionStatus') != 'online':
         update['$push'] = {'history': {'$each': [{'status': 'online', 'at': stamp}], '$slice': -1000}}
+
     # A single worker owns device ordering. Do not run several copies.
     db.devices.update_one({'deviceId': device_id}, update, upsert=True)
+
     if kind == 'acks':
         status = data.get('status')
         allowed = ['queued', 'sent'] if status == 'accepted' else ['queued', 'sent', 'accepted']
@@ -58,26 +80,32 @@ def receive(topic, payload):
 
 def tick(connection):
     stamp = now()
+
     for device_id in DEVICES:
         db.devices.update_one(
             {'deviceId': device_id, 'connectionStatus': 'online',
              'lastSeenAt': {'$lt': stamp - timedelta(seconds=CONFIG['disconnectSeconds'])}},
             {'$set': {'connectionStatus': 'disconnected'},
              '$push': {'history': {'$each': [{'status': 'disconnected', 'at': stamp}], '$slice': -1000}}})
+        
     db.commands.update_many(
         {'status': {'$in': ['queued', 'sent', 'accepted']}, 'deadlineAt': {'$lte': stamp}},
         {'$set': {'status': 'timed_out', 'updatedAt': stamp},
          '$push': {'history': {'status': 'timed_out', 'at': stamp}}})
+    
     if not connection.is_connected():
         return
+    
     # Retry pending delivery; the agent deduplicates by commandId.
     for command in db.commands.find({'status': {'$in': ['queued', 'sent', 'accepted']},
                                      'deadlineAt': {'$gt': stamp}}).limit(100):
         if command.get('lastSentAt') and (stamp - command['lastSentAt']).total_seconds() < 2:
             continue
+
         packet = {key: command[key] for key in ('commandId', 'deviceId', 'action', 'simulated')}
         packet.update(requestedAt=command['requestedAt'].isoformat(), deadlineAt=command['deadlineAt'].isoformat())
         info = connection.publish(f"devices/{command['deviceId']}/commands", json.dumps(packet), qos=1, retain=False)
+
         if info.rc == 0:
             db.commands.update_one({'commandId': command['commandId']}, {'$set': {'lastSentAt': stamp}})
             db.commands.update_one({'commandId': command['commandId'], 'status': 'queued'},
@@ -109,6 +137,7 @@ def main():
     connection.on_connect = on_connect
     connection.on_message = on_message
     connect(connection)
+    
     try:
         while True:
             try:

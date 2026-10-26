@@ -31,9 +31,22 @@ def devices():
 def commands(device_id):
     if device_id not in DEVICES:
         return {'error': '장비를 찾을 수 없습니다'}, 404
+
+    allowed_actions = {
+        'beacon': ('turn_on', 'turn_off'),
+        'gate': ('open', 'close'),
+    }
+
+    device_type = DEVICES[device_id]['type']
+    actions = allowed_actions.get(device_type, ())
+
     data = request.get_json(silent=True)
-    if not isinstance(data, dict) or data.get('action') not in ('turn_on', 'turn_off'):
-        return {'error': 'action은 turn_on 또는 turn_off여야 합니다'}, 400
+    
+    if not isinstance(data, dict) or data.get('action') not in actions:
+        return {
+            'error': f"action은 {', '.join(actions)} 중 하나여야 합니다"
+        }, 400
+    
     return public({'command': create_command(device_id, data['action'])}), 202
 
 
