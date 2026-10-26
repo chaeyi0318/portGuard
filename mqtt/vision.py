@@ -45,6 +45,17 @@ def receive_event(payload, connection):
         finally:
             temporary.unlink()
     incident, created = save_incident(event)
+
+    if created:
+        connection.publish(
+            "portguard/internal/incidents/created",
+            json.dumps({
+                "eventId": incident["eventId"],
+            }),
+            qos=1,
+            retain=False,
+        )
+        
     # Only a successful DB operation (including a known duplicate) permits ACK.
     connection.publish('devices/CAM-01/acks', json.dumps({
         'deviceId': 'CAM-01', 'eventId': incident['eventId'],
